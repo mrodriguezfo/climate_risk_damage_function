@@ -1,5 +1,5 @@
 """
-Setup script para la librería de cálculo de daños por inundación.
+Setup script for the flood damage calculation library.
 """
 
 from setuptools import setup, find_packages
@@ -15,7 +15,7 @@ setup(
     version="1.0.0",
     author="Flood Damage Analysis Team",
     author_email="contact@flooddamage.com",
-    description="Librería para el cálculo de funciones de daño por inundaciones",
+    description="Library for calculating flood damage functions",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/yourusername/flood-damage-library",

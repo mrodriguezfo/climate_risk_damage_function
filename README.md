@@ -51,14 +51,21 @@ from flood_damage_library import JRCFloodDamageCalculator
 # Initialize calculator
 calculator = JRCFloodDamageCalculator(data_directory="./processed_jrc_data")
 
-# Calculate damage for a location
-result = calculator.calculate_jrc_damage(
-    latitude=52.5200,      # Berlin
-    longitude=13.4050,
+# Option 1: Simple calculation with country code (coordinates optional!)
+result = calculator.calculate_damage_by_country(
     flood_depth=1.5,       # 1.5 meters
     country_code='DE',     # Germany
     building_type='residential',
     area_m2=120           # 120 m²
+)
+
+# Option 2: With coordinates (for automatic country inference)
+result = calculator.calculate_jrc_damage(
+    latitude=52.5200,      # Berlin coordinates
+    longitude=13.4050,
+    flood_depth=1.5,
+    building_type='residential',
+    area_m2=120
 )
 
 print(f"Economic damage: €{result['damage_assessment']['economic_damage_eur']:,.2f}")
@@ -152,10 +159,14 @@ print(f"Total damage: €{total_damage:,.2f}")
 #### Main Methods
 
 ```python
-# Individual calculation
-calculate_jrc_damage(latitude, longitude, flood_depth, 
+# Individual calculation (flexible - with or without coordinates)
+calculate_jrc_damage(latitude=None, longitude=None, flood_depth=None, 
                     country_code=None, building_type='residential', 
                     area_m2=None, region=None)
+
+# Simplified country-based calculation (no coordinates needed)
+calculate_damage_by_country(flood_depth, country_code, 
+                           building_type='residential', area_m2=None, region=None)
 
 # Batch calculation
 calculate_damage_batch_jrc(locations)
@@ -168,13 +179,15 @@ get_countries_with_data(building_type='residential')
 
 #### Parameters
 
-- **latitude** (float): Latitude (-90 to 90)
-- **longitude** (float): Longitude (-180 to 180)
-- **flood_depth** (float): Depth in meters (≥ 0)
-- **country_code** (str, optional): ISO country code
-- **building_type** (str): 'residential', 'commercial', 'industrial'
-- **area_m2** (float, optional): Area in square meters
-- **region** (str, optional): Specific JRC region
+- **flood_depth** (float): Depth in meters (≥ 0) - **Required**
+- **country_code** (str): ISO country code (e.g., 'US', 'DE', 'BR') - **Required if no coordinates**
+- **latitude** (float, optional): Latitude (-90 to 90) - Only needed if country_code not provided
+- **longitude** (float, optional): Longitude (-180 to 180) - Only needed if country_code not provided
+- **building_type** (str): 'residential', 'commercial', 'industrial' - Default: 'residential'
+- **area_m2** (float, optional): Area in square meters - Default: 100
+- **region** (str, optional): Specific JRC region - Auto-inferred from country if not provided
+
+**Note**: Either provide `country_code` OR both `latitude` and `longitude`. Coordinates are only used for automatic country inference.
 
 ## 📋 Data Validation
 

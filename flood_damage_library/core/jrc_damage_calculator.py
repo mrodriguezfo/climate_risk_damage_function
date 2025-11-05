@@ -1,6 +1,6 @@
 """
-Calculadora de daños por inundación basada en los datos del JRC (Joint Research Centre).
-Utiliza las funciones de daño globales y valores máximos por país del JRC.
+Flood damage calculator based on JRC (Joint Research Centre) data.
+Uses global damage functions and maximum values by country from JRC.
 """
 
 import pandas as pd
@@ -15,29 +15,29 @@ from .data_manager import DataManager
 
 class JRCFloodDamageCalculator:
     """
-    Calculadora de daños por inundación basada en datos del JRC.
+    Flood damage calculator based on JRC data.
     
-    Características:
-    - Funciones de daño por región (Europa, América del Norte, Asia, etc.)
-    - Valores máximos de daño por país y tipo de edificación
-    - Soporte para múltiples tipos de edificación (residencial, comercial, industrial)
-    - Análisis de incertidumbre con desviaciones estándar
+    Features:
+    - Damage functions by region (Europe, North America, Asia, etc.)
+    - Maximum damage values by country and building type
+    - Support for multiple building types (residential, commercial, industrial)
+    - Uncertainty analysis with standard deviations
     """
     
     def __init__(self, data_directory: str = "./processed_jrc_data"):
         """
-        Inicializa la calculadora JRC.
+        Initialize the JRC calculator.
         
         Args:
-            data_directory: Directorio con datos procesados del JRC
+            data_directory: Directory with processed JRC data
         """
         self.data_directory = Path(data_directory)
         self.logger = logging.getLogger(__name__)
         
-        # Cargar datos del JRC
+        # Load JRC data
         self._load_jrc_data()
         
-        # Mapeo de regiones a países (simplificado)
+        # Region to country mapping (simplified)
         self.region_mapping = {
             'EUROPE': ['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'CH', 'SE', 'NO', 'DK', 'FI', 'PL', 'CZ', 'HU', 'RO', 'BG', 'GR', 'PT', 'IE', 'LU', 'SK', 'SI', 'EE', 'LV', 'LT', 'CY', 'MT', 'HR', 'GB', 'IS', 'LI', 'MC', 'SM', 'VA', 'AD', 'AL', 'BA', 'ME', 'MK', 'RS', 'XK', 'MD', 'UA', 'BY', 'RU'],
             'North AMERICA': ['US', 'CA', 'MX', 'GT', 'BZ', 'SV', 'HN', 'NI', 'CR', 'PA'],
@@ -48,107 +48,149 @@ class JRCFloodDamageCalculator:
         }
     
     def _load_jrc_data(self):
-        """Carga los datos procesados del JRC."""
+        """Load processed JRC data."""
         try:
-            # Cargar funciones de daño
+            # Load damage functions
             damage_func_file = self.data_directory / 'damage_functions_jrc.parquet'
             if damage_func_file.exists():
-                self.damage_functions = pd.read_parquet(damage_func_file)
-                print(f"✅ Funciones de daño JRC cargadas: {len(self.damage_functions)} registros")
+                try:
+                    self.damage_functions = pd.read_parquet(damage_func_file, engine='pyarrow')
+                except Exception as e:
+                    # Fallback to fastparquet if pyarrow fails
+                    try:
+                        self.damage_functions = pd.read_parquet(damage_func_file, engine='fastparquet')
+                    except Exception:
+                        # Final fallback - recreate from CSV if available
+                        csv_file = self.data_directory / 'damage_functions_jrc.csv'
+                        if csv_file.exists():
+                            self.damage_functions = pd.read_csv(csv_file)
+                        else:
+                            raise e
+                print(f"✅ JRC damage functions loaded: {len(self.damage_functions)} records")
             else:
-                raise FileNotFoundError(f"Archivo no encontrado: {damage_func_file}")
+                raise FileNotFoundError(f"File not found: {damage_func_file}")
             
-            # Cargar valores máximos de daño
+            # Load maximum damage values
             self.max_damage_data = {}
             
-            for building_type in ['residential', 'commercial', 'industrial']:
+            for building_type in ['residential', 'commercial', 'industrial', 'agriculture', 'infrastructure', 'transport']:
                 file_path = self.data_directory / f'max_damage_{building_type}_jrc.parquet'
                 if file_path.exists():
-                    self.max_damage_data[building_type] = pd.read_parquet(file_path)
-                    print(f"✅ Valores máximos {building_type} cargados: {len(self.max_damage_data[building_type])} países")
+                    try:
+                        self.max_damage_data[building_type] = pd.read_parquet(file_path, engine='pyarrow')
+                    except Exception:
+                        try:
+                            self.max_damage_data[building_type] = pd.read_parquet(file_path, engine='fastparquet')
+                        except Exception:
+                            # Skip if can't load
+                            continue
+                    print(f"✅ Maximum {building_type} values loaded: {len(self.max_damage_data[building_type])} countries")
             
-            # Cargar tabla ISO
+            # Load ISO table
             iso_file = self.data_directory / 'iso_table_jrc.parquet'
             if iso_file.exists():
-                self.iso_table = pd.read_parquet(iso_file)
-                print(f"✅ Tabla ISO cargada: {len(self.iso_table)} países")
+                try:
+                    self.iso_table = pd.read_parquet(iso_file, engine='pyarrow')
+                except Exception:
+                    try:
+                        self.iso_table = pd.read_parquet(iso_file, engine='fastparquet')
+                    except Exception:
+                        self.iso_table = pd.DataFrame()
+                print(f"✅ ISO table loaded: {len(self.iso_table)} countries")
             else:
                 self.iso_table = pd.DataFrame()
             
         except Exception as e:
-            self.logger.error(f"Error cargando datos JRC: {e}")
-            raise CalculationError(f"No se pudieron cargar los datos del JRC: {e}")
+            self.logger.error(f"Error loading JRC data: {e}")
+            raise CalculationError(f"Could not load JRC data: {e}")
     
     def calculate_jrc_damage(self,
-                           latitude: float,
-                           longitude: float,
-                           flood_depth: float,
+                           latitude: Optional[float] = None,
+                           longitude: Optional[float] = None,
+                           flood_depth: float = None,
                            country_code: Optional[str] = None,
                            building_type: str = 'residential',
                            area_m2: Optional[float] = None,
                            region: Optional[str] = None,
                            **kwargs) -> Dict:
         """
-        Calcula daños usando las funciones del JRC.
+        Calculate damage using JRC functions.
         
         Args:
-            latitude: Latitud de la ubicación
-            longitude: Longitud de la ubicación
-            flood_depth: Profundidad de inundación en metros
-            country_code: Código ISO del país (ej: 'US', 'DE', 'BR')
-            building_type: Tipo de edificación ('residential', 'commercial', 'industrial')
-            area_m2: Área afectada en metros cuadrados
-            region: Región específica a usar (opcional)
+            latitude: Location latitude (optional, used for country inference if country_code not provided)
+            longitude: Location longitude (optional, used for country inference if country_code not provided)
+            flood_depth: Flood depth in meters (required)
+            country_code: ISO country code (e.g., 'US', 'DE', 'BR') - required if coordinates not provided
+            building_type: Building type ('residential', 'commercial', 'industrial')
+            area_m2: Affected area in square meters
+            region: Specific region to use (optional, inferred from country if not provided)
             
         Returns:
-            Diccionario con resultados detallados
+            Dictionary with detailed results
         """
-        # Validar entrada
-        validate_coordinates(latitude, longitude)
+        # Validate required inputs
+        if flood_depth is None:
+            raise DataValidationError("flood_depth is required")
+        
         validate_flood_depth(flood_depth)
         
-        if building_type not in ['residential', 'commercial', 'industrial']:
-            raise DataValidationError(f"Tipo de edificación no soportado: {building_type}")
+        valid_building_types = ['residential', 'commercial', 'industrial', 'agriculture', 'infrastructure', 'transport']
+        if building_type not in valid_building_types:
+            raise DataValidationError(f"Unsupported building type: {building_type}. Valid types: {valid_building_types}")
         
-        # Inferir país y región si no se proporcionan
+        # Validate coordinates if provided
+        if latitude is not None or longitude is not None:
+            if latitude is None or longitude is None:
+                raise DataValidationError("Both latitude and longitude must be provided if using coordinates")
+            validate_coordinates(latitude, longitude)
+        
+        # Infer country and region if not provided
         if not country_code:
-            country_code = self._infer_country_from_coordinates(latitude, longitude)
+            if latitude is not None and longitude is not None:
+                country_code = self._infer_country_from_coordinates(latitude, longitude)
+            else:
+                raise DataValidationError("Either coordinates (latitude, longitude) or country_code must be provided")
         
         if not region:
             region = self._get_region_for_country(country_code)
         
-        # Obtener función de daño
+        # Get damage function
         damage_ratio = self._get_jrc_damage_ratio(flood_depth, building_type, region)
         
-        # Obtener valores máximos de daño para el país
+        # Get maximum damage values for the country
         max_damage_data = self._get_max_damage_for_country(country_code, building_type)
         
-        # Calcular área (usar valor por defecto si no se proporciona)
+        # Calculate area (use default value if not provided)
         if not area_m2:
-            area_m2 = 100  # 100 m² por defecto
+            area_m2 = 100  # 100 m² default
         
-        # Calcular daño económico
-        max_damage_per_m2 = max_damage_data.get('total_building_eur_m2', 500)  # EUR/m² por defecto
+        # Calculate economic damage
+        max_damage_per_m2 = max_damage_data.get('total_building_eur_m2', 500)  # EUR/m² default
         total_value = area_m2 * max_damage_per_m2
         economic_damage = total_value * damage_ratio
         
-        # Obtener información del país
+        # Get country information
         country_info = self._get_country_info(country_code)
         
-        # Análisis de incertidumbre
+        # Uncertainty analysis
         uncertainty_analysis = self._calculate_jrc_uncertainty(
             economic_damage, damage_ratio, building_type, region
         )
         
-        # Construir resultado
+        # Build result
+        location_info = {
+            'country_code': country_code,
+            'country_name': country_info.get('country_name', 'Unknown'),
+            'region': region
+        }
+        
+        # Add coordinates only if provided
+        if latitude is not None and longitude is not None:
+            location_info['latitude'] = latitude
+            location_info['longitude'] = longitude
+        
         result = {
-            'location': {
-                'latitude': latitude,
-                'longitude': longitude,
-                'country_code': country_code,
-                'country_name': country_info.get('country_name', 'Unknown'),
-                'region': region
-            },
+            'location': location_info,
             'flood_parameters': {
                 'depth_m': flood_depth
             },
@@ -181,30 +223,62 @@ class JRCFloodDamageCalculator:
         
         return result
     
-    def _get_jrc_damage_ratio(self, depth: float, building_type: str, region: str) -> float:
-        """Obtiene el ratio de daño usando las funciones del JRC."""
+    def calculate_damage_by_country(self,
+                                   flood_depth: float,
+                                   country_code: str,
+                                   building_type: str = 'residential',
+                                   area_m2: Optional[float] = None,
+                                   region: Optional[str] = None) -> Dict:
+        """
+        Calculate damage using country code directly (no coordinates needed).
         
-        # Mapear tipo de edificación a clase de daño JRC
+        Args:
+            flood_depth: Flood depth in meters
+            country_code: ISO country code (e.g., 'US', 'DE', 'BR')
+            building_type: Building type ('residential', 'commercial', 'industrial')
+            area_m2: Affected area in square meters
+            region: Specific region to use (optional, inferred from country if not provided)
+            
+        Returns:
+            Dictionary with detailed results
+        """
+        return self.calculate_jrc_damage(
+            latitude=None,
+            longitude=None,
+            flood_depth=flood_depth,
+            country_code=country_code,
+            building_type=building_type,
+            area_m2=area_m2,
+            region=region
+        )
+    
+    def _get_jrc_damage_ratio(self, depth: float, building_type: str, region: str) -> float:
+        """Get damage ratio using JRC functions."""
+        
+        # Map building type to JRC damage class
         building_type_mapping = {
-            'residential': 'Residential buildings',
-            'commercial': 'Commercial buildings',
-            'industrial': 'Industrial buildings'
+            'residential': 'residential_buildings',
+            'commercial': 'commercial_buildings', 
+            'industrial': 'industrial_buildings',
+            'agriculture': 'agriculture',
+            'infrastructure': 'infrastructure___roads',
+            'transport': 'transport'
         }
         
-        damage_class = building_type_mapping.get(building_type, 'Residential buildings')
+        damage_class = building_type_mapping.get(building_type, 'residential_buildings')
         
-        # Filtrar funciones de daño
+        # Filter damage functions
         mask = (
-            (self.damage_functions['damage_class'] == damage_class) &
+            (self.damage_functions['building_type'] == damage_class) &
             (self.damage_functions['region'] == region)
         )
         
         relevant_functions = self.damage_functions[mask]
         
         if relevant_functions.empty:
-            # Intentar con región GLOBAL
+            # Try with GLOBAL region
             mask_global = (
-                (self.damage_functions['damage_class'] == damage_class) &
+                (self.damage_functions['building_type'] == damage_class) &
                 (self.damage_functions['region'] == 'GLOBAL')
             )
             relevant_functions = self.damage_functions[mask_global]
@@ -255,11 +329,14 @@ class JRCFloodDamageCalculator:
         if not country_data.empty:
             return country_data.iloc[0].to_dict()
         else:
-            # Valores por defecto basados en el tipo de edificación
+            # Default values based on building type
             defaults = {
                 'residential': {'total_building_eur_m2': 400},
                 'commercial': {'total_building_eur_m2': 600},
-                'industrial': {'total_building_eur_m2': 500}
+                'industrial': {'total_building_eur_m2': 500},
+                'agriculture': {'total_building_eur_m2': 50},  # Lower value for agricultural land
+                'infrastructure': {'total_building_eur_m2': 25},  # Infrastructure damage per m2
+                'transport': {'total_building_eur_m2': 750}  # Transport infrastructure
             }
             return defaults.get(building_type, {'total_building_eur_m2': 500})
     
@@ -403,15 +480,17 @@ class JRCFloodDamageCalculator:
         return results
     
     def get_available_regions(self) -> List[str]:
-        """Obtiene las regiones disponibles en los datos JRC."""
-        return self.damage_functions['region'].unique().tolist()
+        """Get list of available regions in the JRC data."""
+        if hasattr(self, 'damage_functions') and not self.damage_functions.empty:
+            return sorted(self.damage_functions['region'].unique().tolist())
+        return ['EUROPE', 'North AMERICA', 'Centr&South_AMERICA', 'ASIA', 'AFRICA', 'OCEANIA', 'GLOBAL']
     
     def get_available_building_types(self) -> List[str]:
-        """Obtiene los tipos de edificación disponibles."""
-        return ['residential', 'commercial', 'industrial']
+        """Get list of available building types."""
+        return ['residential', 'commercial', 'industrial', 'agriculture', 'infrastructure', 'transport']
     
     def get_countries_with_data(self, building_type: str = 'residential') -> List[str]:
-        """Obtiene la lista de países con datos disponibles."""
+        """Get list of countries with maximum damage data for the specified building type."""
         if building_type in self.max_damage_data:
-            return self.max_damage_data[building_type]['country'].tolist()
+            return sorted(self.max_damage_data[building_type]['country'].unique().tolist())
         return []

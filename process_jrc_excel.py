@@ -337,7 +337,7 @@ def analyze_processed_data(data_dir):
 
 def main():
     """Función principal."""
-    excel_file = 'copy_of_global_flood_depth-damage_functions__30102017.xlsx'
+    excel_file = 'copy_of_global_flood_depth-damage_functions__30102017 (1).xlsx'
     output_dir = './processed_jrc_data'
     
     if not os.path.exists(excel_file):
