@@ -183,7 +183,7 @@ get_countries_with_data(building_type='residential')
 - **country_code** (str): ISO country code (e.g., 'US', 'DE', 'BR') - **Required if no coordinates**
 - **latitude** (float, optional): Latitude (-90 to 90) - Only needed if country_code not provided
 - **longitude** (float, optional): Longitude (-180 to 180) - Only needed if country_code not provided
-- **building_type** (str): 'residential', 'commercial', 'industrial' - Default: 'residential'
+- **building_type** (str): 'residential', 'commercial', 'industrial', 'agriculture', 'infrastructure', 'transport' - Default: 'residential'
 - **area_m2** (float, optional): Area in square meters - Default: 100
 - **region** (str, optional): Specific JRC region - Auto-inferred from country if not provided
 
@@ -311,6 +311,37 @@ print(f"95% CI: €{ci_95['lower_eur']:,.0f} - €{ci_95['upper_eur']:,.0f}")
 - Use multiple scenarios for sensitivity analysis
 - Consider local factors not captured in global functions
 - Update economic values according to local inflation
+
+## 📁 Repository Structure
+
+```
+climate_risk_damage_function/
+├── flood_damage_library/           # Main library package
+│   ├── __init__.py
+│   ├── core/                       # Core calculation modules
+│   │   ├── __init__.py
+│   │   ├── jrc_damage_calculator.py    # Main JRC calculator
+│   │   ├── damage_calculator.py        # Base calculator
+│   │   ├── data_manager.py             # Data management
+│   │   └── enhanced_damage_calculator.py
+│   └── utils/                      # Utility modules
+│       ├── __init__.py
+│       ├── exceptions.py           # Custom exceptions
+│       └── validators.py           # Input validation
+├── processed_jrc_data/             # JRC data (8 parquet files)
+│   ├── damage_functions_jrc.parquet     # 270 damage functions
+│   ├── iso_table_jrc.parquet           # Country codes
+│   ├── max_damage_residential_jrc.parquet
+│   ├── max_damage_commercial_jrc.parquet
+│   ├── max_damage_industrial_jrc.parquet
+│   ├── max_damage_agriculture_jrc.parquet
+│   ├── max_damage_infrastructure_jrc.parquet
+│   └── max_damage_transport_jrc.parquet
+├── flood_damage_tutorial.ipynb    # Interactive tutorial
+├── requirements.txt               # Dependencies
+├── setup.py                      # Package installation
+└── README.md                     # Documentation
+```
 
 ## 📄 License
 
