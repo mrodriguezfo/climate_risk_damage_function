@@ -21,6 +21,13 @@ A comprehensive Python library for calculating economic damages caused by floods
 - Confidence intervals (68% and 95%)
 - Sensitivity analysis
 
+### ✅ People Impact Analysis
+- **People affected**: Number of people impacted by flooding
+- **People displaced**: Number requiring temporary relocation
+- **People at risk**: Number in potentially dangerous situations
+- **Impact severity**: Categorized levels (low, moderate, high, severe, extreme)
+- **Evacuation recommendations**: Automated guidance based on flood conditions
+
 ### ✅ Advanced Features
 - Automatic region inference from coordinates
 - Batch calculations for multiple locations
@@ -72,18 +79,44 @@ print(f"Economic damage: €{result['damage_assessment']['economic_damage_eur']:
 print(f"Damage ratio: {result['damage_assessment']['damage_ratio']:.1%}")
 ```
 
+### People Impact Analysis
+
+```python
+# Calculate economic and social impact
+result = calculator.calculate_jrc_damage(
+    flood_depth=1.5,
+    country_code='DE',
+    building_type='residential',
+    area_m2=120,
+    people_count=4  # Number of people in the building
+)
+
+# Economic impact
+print(f"Economic damage: €{result['damage_assessment']['economic_damage_eur']:,.0f}")
+
+# Social impact
+if 'people_impact' in result:
+    people = result['people_impact']
+    print(f"People affected: {people['people_affected']} out of {people['total_people']}")
+    print(f"People displaced: {people['people_displaced']}")
+    print(f"Impact severity: {people['impact_severity']}")
+    print(f"Evacuation recommended: {people['evacuation_recommended']}")
+```
+
 ### Batch Analysis
 
 ```python
-# Multiple locations
+# Multiple locations with people impact
 locations = [
     {
         'latitude': 52.5200, 'longitude': 13.4050, 'flood_depth': 1.5,
-        'country_code': 'DE', 'building_type': 'residential', 'area_m2': 100
+        'country_code': 'DE', 'building_type': 'residential', 'area_m2': 100,
+        'people_count': 4
     },
     {
         'latitude': 48.8566, 'longitude': 2.3522, 'flood_depth': 2.0,
-        'country_code': 'FR', 'building_type': 'commercial', 'area_m2': 150
+        'country_code': 'FR', 'building_type': 'commercial', 'area_m2': 150,
+        'people_count': 20
     }
 ]
 
@@ -91,21 +124,24 @@ results = calculator.calculate_damage_batch_jrc(locations)
 
 total_damage = sum(r['damage_assessment']['economic_damage_eur'] 
                   for r in results if 'error' not in r)
+total_people_affected = sum(r.get('people_impact', {}).get('people_affected', 0)
+                           for r in results if 'error' not in r)
 print(f"Total damage: €{total_damage:,.2f}")
+print(f"Total people affected: {total_people_affected}")
 ```
 
 ### Batch Analysis by Country (No Coordinates Required)
 
 ```python
-# Portfolio analysis using only country codes
+# Portfolio analysis using only country codes (with people impact)
 scenarios = [
     {
         'flood_depth': 1.5, 'country_code': 'DE', 
-        'building_type': 'residential', 'area_m2': 120
+        'building_type': 'residential', 'area_m2': 120, 'people_count': 4
     },
     {
         'flood_depth': 2.0, 'country_code': 'FR', 
-        'building_type': 'commercial', 'area_m2': 500
+        'building_type': 'commercial', 'area_m2': 500, 'people_count': 25
     },
     {
         'flood_depth': 1.8, 'country_code': 'IT', 
