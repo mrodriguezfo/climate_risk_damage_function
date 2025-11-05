@@ -494,3 +494,111 @@ class JRCFloodDamageCalculator:
         if building_type in self.max_damage_data:
             return sorted(self.max_damage_data[building_type]['country'].unique().tolist())
         return []
+    
+    def calculate_damage_batch_by_country(self, scenarios: List[Dict]) -> List[Dict]:
+        """
+        Calculate flood damage for multiple scenarios using country codes (no coordinates needed).
+        
+        This function processes multiple damage calculations in batch using only country codes,
+        making it ideal for portfolio analysis, risk assessment across countries, or 
+        scenario analysis without needing precise coordinates.
+        
+        Args:
+            scenarios: List of dictionaries with scenario data. Each dictionary should contain:
+                - flood_depth (float): Flood depth in meters (required)
+                - country_code (str): ISO country code like 'US', 'DE', 'BR' (required)
+                - building_type (str, optional): Building type, default 'residential'
+                - area_m2 (float, optional): Area in square meters, default 100
+                - region (str, optional): JRC region, auto-inferred if not provided
+                - Any additional parameters for the calculation
+                
+        Returns:
+            List[Dict]: List of calculation results, each containing:
+                - batch_index: Index in the original scenarios list
+                - All standard calculation results (damage_assessment, uncertainty_analysis, etc.)
+                - Or error information if calculation failed
+                
+        Example:
+            ```python
+            calculator = JRCFloodDamageCalculator()
+            
+            scenarios = [
+                {
+                    'flood_depth': 1.5,
+                    'country_code': 'DE',
+                    'building_type': 'residential',
+                    'area_m2': 120
+                },
+                {
+                    'flood_depth': 2.0,
+                    'country_code': 'FR',
+                    'building_type': 'commercial',
+                    'area_m2': 500
+                },
+                {
+                    'flood_depth': 1.0,
+                    'country_code': 'IT',
+                    'building_type': 'industrial',
+                    'area_m2': 1000
+                }
+            ]
+            
+            results = calculator.calculate_damage_batch_by_country(scenarios)
+            
+            for result in results:
+                if 'error' not in result:
+                    damage = result['damage_assessment']['economic_damage_eur']
+                    print(f"Scenario {result['batch_index']}: €{damage:,.0f}")
+                else:
+                    print(f"Scenario {result['batch_index']}: Error - {result['error']}")
+            ```
+        """
+        results = []
+        
+        for i, scenario in enumerate(scenarios):
+            try:
+                # Validate required parameters
+                if 'flood_depth' not in scenario:
+                    raise DataValidationError("flood_depth is required for each scenario")
+                if 'country_code' not in scenario:
+                    raise DataValidationError("country_code is required for each scenario")
+                
+                # Calculate damage using country-based method
+                result = self.calculate_damage_by_country(
+                    flood_depth=scenario['flood_depth'],
+                    country_code=scenario['country_code'],
+                    building_type=scenario.get('building_type', 'residential'),
+                    area_m2=scenario.get('area_m2', 100),
+                    region=scenario.get('region')
+                )
+                
+                # Add batch information
+                result['batch_index'] = i
+                result['input_scenario'] = {
+                    'flood_depth': scenario['flood_depth'],
+                    'country_code': scenario['country_code'],
+                    'building_type': scenario.get('building_type', 'residential'),
+                    'area_m2': scenario.get('area_m2', 100)
+                }
+                
+                results.append(result)
+                
+            except Exception as e:
+                # Handle errors gracefully
+                error_result = {
+                    'batch_index': i,
+                    'error': str(e),
+                    'error_type': type(e).__name__,
+                    'input_scenario': {
+                        'flood_depth': scenario.get('flood_depth'),
+                        'country_code': scenario.get('country_code'),
+                        'building_type': scenario.get('building_type', 'residential'),
+                        'area_m2': scenario.get('area_m2', 100)
+                    }
+                }
+                results.append(error_result)
+                
+                # Log the error for debugging
+                self.logger.warning(f"Batch calculation failed for scenario {i}: {str(e)}")
+        
+        return results

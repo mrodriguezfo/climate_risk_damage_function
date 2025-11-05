@@ -94,6 +94,35 @@ total_damage = sum(r['damage_assessment']['economic_damage_eur']
 print(f"Total damage: €{total_damage:,.2f}")
 ```
 
+### Batch Analysis by Country (No Coordinates Required)
+
+```python
+# Portfolio analysis using only country codes
+scenarios = [
+    {
+        'flood_depth': 1.5, 'country_code': 'DE', 
+        'building_type': 'residential', 'area_m2': 120
+    },
+    {
+        'flood_depth': 2.0, 'country_code': 'FR', 
+        'building_type': 'commercial', 'area_m2': 500
+    },
+    {
+        'flood_depth': 1.8, 'country_code': 'IT', 
+        'building_type': 'industrial', 'area_m2': 1000
+    }
+]
+
+# Process batch by country (no coordinates needed)
+results = calculator.calculate_damage_batch_by_country(scenarios)
+
+for result in results:
+    if 'error' not in result:
+        scenario = result['input_scenario']
+        damage = result['damage_assessment']['economic_damage_eur']
+        print(f"{scenario['country_code']} {scenario['building_type']}: €{damage:,.0f}")
+```
+
 ## 📊 Data Structure
 
 ### Calculation Result
@@ -168,8 +197,11 @@ calculate_jrc_damage(latitude=None, longitude=None, flood_depth=None,
 calculate_damage_by_country(flood_depth, country_code, 
                            building_type='residential', area_m2=None, region=None)
 
-# Batch calculation
+# Batch calculation (with coordinates)
 calculate_damage_batch_jrc(locations)
+
+# Batch calculation by country (no coordinates needed)
+calculate_damage_batch_by_country(scenarios)
 
 # Available information
 get_available_regions()
